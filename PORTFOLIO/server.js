@@ -56,6 +56,20 @@ const saveDB = (data) => {
 };
 
 // ------------------------------------------------------------------
+// Page Routes (Ensures Vercel serves HTML files correctly)
+// ------------------------------------------------------------------
+
+// Serve main portfolio index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Serve admin portal html page
+app.get(['/admin', '/admin.html'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// ------------------------------------------------------------------
 // GET APIs
 // ------------------------------------------------------------------
 
