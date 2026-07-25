@@ -4,8 +4,16 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const PORT = 3000;
-const DB_FILE = path.join(__dirname, 'db.json');
+const PORT = process.env.PORT || 3000;
+
+// On Vercel (serverless), local file writes must happen in the writable /tmp directory
+const IS_VERCEL = process.env.VERCEL === '1';
+const DB_FILE = IS_VERCEL 
+    ? path.join('/tmp', 'db.json') 
+    : path.join(__dirname, 'db.json');
+
+// Initial seed file path
+const INITIAL_DB = path.join(__dirname, 'db.json');
 
 // Middleware
 app.use(cors());
@@ -13,13 +21,24 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 // Initialize local JSON DB structure if missing
-if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({ projects: [], certifications: [] }, null, 2));
-}
+const initDB = () => {
+    if (!fs.existsSync(DB_FILE)) {
+        if (fs.existsSync(INITIAL_DB)) {
+            // Copy default db.json template to writable /tmp directory on Vercel
+            fs.copyFileSync(INITIAL_DB, DB_FILE);
+        } else {
+            // Fallback initial structure
+            fs.writeFileSync(DB_FILE, JSON.stringify({ projects: [], certifications: [] }, null, 2));
+        }
+    }
+};
+
+initDB();
 
 // Helper functions for Database Reads/Writes
 const getDB = () => {
     try {
+        initDB();
         const data = fs.readFileSync(DB_FILE, 'utf8');
         return JSON.parse(data);
     } catch (err) {
@@ -28,7 +47,12 @@ const getDB = () => {
 };
 
 const saveDB = (data) => {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+    try {
+        initDB();
+        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+    } catch (err) {
+        console.error('Failed to write to DB:', err);
+    }
 };
 
 // ------------------------------------------------------------------
@@ -128,8 +152,13 @@ app.post('/api/certifications', (req, res) => {
     }
 });
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`Admin Portal: http://localhost:${PORT}/admin.html`);
-});
+// Start Server locally
+if (process.env.NODE_ENV !== 'production' && !IS_VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}`);
+        console.log(`Admin Portal: http://localhost:${PORT}/admin.html`);
+    });
+}
+
+// Export module for Vercel Serverless Function engine
+module.exports = app;
